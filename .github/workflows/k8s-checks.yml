@@ -52,14 +52,27 @@ jobs:
           ./bin/trivy config --severity HIGH,CRITICAL --exit-code 1 --ignorefile ../.trivyignore .
 
       - name: Conftest (OPA policies) - optional
-        if: ${{ hashFiles('../policies/*.rego') != '' }}
+        if: ${{ hashFiles('policies/*.rego') != '' }}   # <-- no ".."
+        working-directory: ${{ github.workspace }}      # <-- run from repo root
         run: |
           set -e
           CONFTEST_VERSION=0.52.0
           curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" -o conftest.tar.gz
           tar -xzf conftest.tar.gz
           sudo mv conftest /usr/local/bin/
-          conftest test rendered.yaml -p ../policies
+          conftest --version
+          # rendered.yaml is inside the chart dir
+          conftest test flaskpgchart/rendered.yaml -p policies
+
+      # - name: Conftest (OPA policies) - optional
+      #   if: ${{ hashFiles('../policies/*.rego') != '' }}
+      #   run: |
+      #     set -e
+      #     CONFTEST_VERSION=0.52.0
+      #     curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" -o conftest.tar.gz
+      #     tar -xzf conftest.tar.gz
+      #     sudo mv conftest /usr/local/bin/
+      #     conftest test rendered.yaml -p ../policies
 
       - name: Upload rendered manifests & reports
         if: always()
