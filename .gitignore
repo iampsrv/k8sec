@@ -1,0 +1,12 @@
+# Python/Node common
+__pycache__/
+*.pyc
+node_modules/
+.env
+# Helm render
+flaskpgchart/rendered.yaml
+# Tooling
+kubeconform.log
+kube-linter.log
+bin/
+conftest.tar.gz

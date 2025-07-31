@@ -1,0 +1,72 @@
+name: k8s-checks
+on:
+  pull_request:
+  push:
+    branches: [ master ]
+
+jobs:
+  validate-and-scan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flaskpgchart
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm, kubeconform, kube-linter
+        run: |
+          set -e
+          sudo apt-get update && sudo apt-get install -y jq
+          # Helm
+          HELM_VERSION=3.15.2
+          curl -sL https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz | tar xz
+          sudo mv linux-amd64/helm /usr/local/bin/ && rm -rf linux-amd64
+          # kubeconform
+          KC_VERSION=0.6.5
+          curl -sL "https://github.com/yannh/kubeconform/releases/download/v${KC_VERSION}/kubeconform-linux-amd64.tar.gz" | tar -xz
+          sudo mv kubeconform /usr/local/bin/
+          # kube-linter
+          KL_VERSION=0.6.7
+          curl -sL "https://github.com/stackrox/kube-linter/releases/download/v${KL_VERSION}/kube-linter-linux.tar.gz" | tar -xz
+          sudo mv kube-linter /usr/local/bin/
+
+      - name: Render Helm chart
+        run: |
+          helm dependency update . || true
+          helm template flaskpgchart . -f values.yaml > rendered.yaml
+          echo "Rendered bytes: $(wc -c < rendered.yaml)"
+
+      - name: kubeconform
+        run: |
+          kubeconform -kubernetes-version 1.29.0 -strict -ignore-missing-schemas -summary rendered.yaml | tee ../kubeconform.log
+
+      - name: kube-linter
+        run: |
+          kube-linter lint rendered.yaml | tee ../kube-linter.log
+
+      - name: Trivy config scan
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ./bin
+          [ -f "../.trivyignore" ] || touch ../.trivyignore
+          ./bin/trivy config --severity HIGH,CRITICAL --exit-code 1 --ignorefile ../.trivyignore .
+
+      - name: Conftest (OPA policies) - optional
+        if: ${{ hashFiles('../policies/*.rego') != '' }}
+        run: |
+          set -e
+          CONFTEST_VERSION=0.52.0
+          curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" -o conftest.tar.gz
+          tar -xzf conftest.tar.gz
+          sudo mv conftest /usr/local/bin/
+          conftest test rendered.yaml -p ../policies
+
+      - name: Upload rendered manifests & reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8s-render-and-reports
+          path: |
+            flaskpgchart/rendered.yaml
+            kubeconform.log
+            kube-linter.log
