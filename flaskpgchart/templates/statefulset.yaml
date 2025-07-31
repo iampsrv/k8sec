@@ -1,35 +1,70 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: postgres
+  name: {{ include "flaskpg.fullname" . }}-postgres
+  labels:
+    {{- include "flaskpg.labels" . | nindent 4 }}
 spec:
-  serviceName: "postgres"
-  replicas: {{ .Values.postgres.replicaCount }}
+  serviceName: {{ include "flaskpg.fullname" . }}-postgres
+  replicas: 1
   selector:
     matchLabels:
-      app: postgres
+      app.kubernetes.io/component: postgres
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app: postgres
+        {{- include "flaskpg.labels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
     spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: postgres
-          image: {{ .Values.postgres.image }}
-          ports:
-            - containerPort: {{ .Values.postgres.containerPort }}
-              name: postgres
+          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
           env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.env.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.env.username | quote }}
             - name: POSTGRES_PASSWORD
-              value: "{{ .Values.postgres.password }}"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresSecret.name }}
+                  key: password
+          ports:
+            - name: postgres
+              containerPort: 5432
+          args:
+            - -c
+            - shared_buffers=256MB
+            - -c
+            - max_connections=100
           volumeMounts:
-            - name: postgres-data
+            - name: data
               mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.postgres.securityContext | nindent 12 }}
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
-        name: postgres-data
+        name: data
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes: {{ toYaml .Values.postgres.storage.accessModes | nindent 10 }}
+        {{- if .Values.postgres.storage.storageClassName }}
+        storageClassName: {{ .Values.postgres.storage.storageClassName }}
+        {{- end }}
         resources:
           requests:
-            storage: 1Gi
+            storage: {{ .Values.postgres.storage.size }}

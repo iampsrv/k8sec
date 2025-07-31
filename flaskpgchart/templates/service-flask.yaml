@@ -1,11 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: flask-task
+  name: {{ include "flaskpg.fullname" . }}-flask
+  labels:
+    {{- include "flaskpg.labels" . | nindent 4 }}
 spec:
-  type: {{ .Values.flaskApp.serviceType }}
+  type: {{ .Values.flaskApp.service.type }}
   selector:
-    app: flask-task
+    app.kubernetes.io/component: flask
+    app.kubernetes.io/instance: {{ .Release.Name }}
   ports:
-    - port: {{ .Values.flaskApp.containerPort }}
-      targetPort: {{ .Values.flaskApp.containerPort }}
+    - name: http
+      port: {{ .Values.flaskApp.service.port }}
+      targetPort: http

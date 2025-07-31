@@ -1,13 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres
+  name: {{ include "flaskpg.fullname" . }}-postgres
   labels:
-    app: postgres
+    {{- include "flaskpg.labels" . | nindent 4 }}
 spec:
-  ports:
-    - port: {{ .Values.postgres.containerPort }}
-      name: postgres
-  clusterIP: None
+  clusterIP: {{ .Values.postgres.service.clusterIP }}
   selector:
-    app: postgres
+    app.kubernetes.io/component: postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: postgres
+      port: {{ .Values.postgres.service.port }}
+      targetPort: 5432
