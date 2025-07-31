@@ -1,95 +1,12 @@
-nameOverride: ""
-fullnameOverride: ""
-
-global:
-  labels: {}
-
-podSecurityContext:
-  seccompProfile:
-    type: RuntimeDefault
-
 flaskApp:
-  image:
-    repository: psrv3/flaskposgresqlapp
-    tag: "1.0.0" # <-- replace with your real pinned tag or digest (never :latest)
-    pullPolicy: IfNotPresent
+  image: psrv3/flaskposgresqlapp
   replicaCount: 1
-  service:
-    type: ClusterIP
-    port: 80
   containerPort: 5000
-  env:
-    databaseHost: postgres
-    databasePort: "5432"
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 10001
-    runAsGroup: 10001
-    readOnlyRootFilesystem: true
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop: [ "ALL" ]
-  waitForPostgres:
-    image: busybox
-    tag: "1.36.1"
-    resources:
-      requests:
-        cpu: 10m
-        memory: 16Mi
-      limits:
-        cpu: 50m
-        memory: 64Mi
-    securityContext:
-      runAsNonRoot: true
-      runAsUser: 10001
-      runAsGroup: 10001
-      readOnlyRootFilesystem: true
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop: [ "ALL" ]
+  configMapName: flask-config
+  serviceType: LoadBalancer
 
 postgres:
-  image:
-    repository: postgres
-    tag: "16.3"
-    pullPolicy: IfNotPresent
-  service:
-    # Headless for StatefulSet
-    clusterIP: None
-    port: 5432
-  storage:
-    size: 5Gi
-    accessModes: [ "ReadWriteOnce" ]
-    # storageClassName: ""  # uncomment if you need a specific class
-  env:
-    database: appdb
-    username: appuser
-    # password comes from secret
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
-    limits:
-      cpu: "1"
-      memory: 1Gi
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 999
-    runAsGroup: 999
-    readOnlyRootFilesystem: true
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop: [ "ALL" ]
-
-# Create a secret with the DB password. Set value here or inject via external Secret manager.
-postgresSecret:
-  create: true
-  name: postgres-secret
-  password: "" # <-- set this or create the secret yourself and set create: false
+  image: postgres:13
+  password: postgres
+  containerPort: 5432
+  replicaCount: 1
